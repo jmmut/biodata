@@ -455,7 +455,7 @@ public class VariantVcfFactory implements VariantFactory {
      * @param numAllele current variant of the alternates.
      * @return the correct allele index depending on numAllele.
      */
-    protected static int mapToMultiallelicIndex (int parsedAllele, int numAllele) {
+    public static int mapToMultiallelicIndex (int parsedAllele, int numAllele) {
         int correctedAllele = parsedAllele;
         if (parsedAllele > 0) {
             if (parsedAllele == numAllele + 1) {

@@ -31,15 +31,14 @@ import java.util.regex.Pattern;
  */
 public class VariantAggregatedVcfFactory extends VariantVcfFactory {
 
-    private final Pattern singleNuc = Pattern.compile("^[ACTG]$");
-    private final Pattern singleRef = Pattern.compile("^R$");
-    private final Pattern refAlt = Pattern.compile("^([ACTG])([ACTG])$");
-    private final Pattern refRef = Pattern.compile("^R{2}$");
-    private final Pattern altNum = Pattern.compile("^A(\\d+)$");
-    private final Pattern altNumaltNum = Pattern.compile("^A(\\d+)A(\\d+)$");
-    private final Pattern altNumRef = Pattern.compile("^A(\\d+)R$");
+    private static final Pattern singleNuc = Pattern.compile("^[ACTG]$");
+    private static final Pattern singleRef = Pattern.compile("^R$");
+    private static final Pattern refAlt = Pattern.compile("^([ACTG])([ACTG])$");
+    private static final Pattern refRef = Pattern.compile("^R{2}$");
+    private static final Pattern altNum = Pattern.compile("^A(\\d+)$");
+    private static final Pattern altNumaltNum = Pattern.compile("^A(\\d+)A(\\d+)$");
+    private static final Pattern altNumRef = Pattern.compile("^A(\\d+)R$");
 
-    private final Pattern numNum = Pattern.compile("^(\\d+)[|/](\\d+)$");
     
     protected Properties tagMap;
     protected Map<String, String> reverseTagMap;
@@ -156,119 +155,7 @@ public class VariantAggregatedVcfFactory extends VariantVcfFactory {
         
     }
 
-    protected void addStats(Variant variant, VariantSourceEntry sourceEntry, int numAllele, String[] alternateAlleles, Map<String, String> attributes, VariantStats variantStats) {
-
-        if (attributes.containsKey("AN") && attributes.containsKey("AC")) {
-            int total = Integer.parseInt(attributes.get("AN"));
-            String[] alleleCountString = attributes.get("AC").split(",");
-            
-            if (alleleCountString.length != alternateAlleles.length) {
-                return;
-            }
-
-            int[] alleleCount = new int[alleleCountString.length];
-
-            String mafAllele = variant.getReference();
-            int referenceCount = total;
-
-            for (int i = 0; i < alleleCountString.length; i++) {
-                alleleCount[i] = Integer.parseInt(alleleCountString[i]);
-                if (i == numAllele) {
-                    variantStats.setAltAlleleCount(alleleCount[i]);
-                }
-                referenceCount -= alleleCount[i];
-            }
-
-            variantStats.setRefAlleleCount(referenceCount);
-            float maf = (float) referenceCount / total;
-
-            for (int i = 0; i < alleleCount.length; i++) {
-                float auxMaf = (float) alleleCount[i] / total;
-                if (auxMaf < maf) {
-                    maf = auxMaf;
-                    mafAllele = alternateAlleles[i];
-                }
-            }
-
-            variantStats.setMaf(maf);
-            variantStats.setMafAllele(mafAllele);
-        }
-
-        if (attributes.containsKey("AF")) {
-            String[] afs = attributes.get("AF").split(",");
-            if (afs.length == alternateAlleles.length) {
-                variantStats.setAltAlleleFreq(Float.parseFloat(afs[numAllele]));
-            }
-        }
-        if (attributes.containsKey("GTC")) {
-            String[] gtcs = attributes.get("GTC").split(",");
-            if (sourceEntry.hasAttribute("GTS")) {    // GTS contains the format like: GTS=GG,GT,TT or GTS=A1A1,A1R,RR
-                addGenotypeWithGTS(variant, sourceEntry, gtcs, alternateAlleles, numAllele, variantStats);
-            } else {
-                for (int i = 0; i < gtcs.length; i++) {
-                    String[] gtcSplit = gtcs[i].split(":");
-                    Integer alleles[] = new Integer[2];
-                    Integer gtc = 0;
-                    String gt = null;
-                    boolean parseable = true;
-                    if (gtcSplit.length == 1) { // GTC=0,5,8
-                        getGenotype(i, alleles);
-                        gtc = Integer.parseInt(gtcs[i]);
-                        gt = mapToMultiallelicIndex(alleles[0], numAllele) + "/" + mapToMultiallelicIndex(alleles[1], numAllele);
-                    } else {    // GTC=0/0:0,0/1:5,1/1:8
-                        Matcher matcher = numNum.matcher(gtcSplit[0]);
-                        if (matcher.matches()) {    // number/number:number
-                            alleles[0] = Integer.parseInt(matcher.group(1));
-                            alleles[1] = Integer.parseInt(matcher.group(2));
-                            gtc = Integer.parseInt(gtcSplit[1]);
-                            gt = mapToMultiallelicIndex(alleles[0], numAllele) + "/" + mapToMultiallelicIndex(alleles[1], numAllele);
-                        } else {    
-                            if (gtcSplit[0].equals("./.")) {    // ./.:number
-                                alleles[0] = -1;
-                                alleles[1] = -1;
-                                gtc = Integer.parseInt(gtcSplit[1]);
-                                gt = "./.";
-                            } else {
-                                parseable = false;
-                            }
-                        }
-                    }
-                    if (parseable) {
-                        Genotype genotype = new Genotype(gt, variant.getReference(), alternateAlleles[numAllele]);
-                        variantStats.addGenotype(genotype, gtc);
-                    }
-                }
-            }
-        }
-
-    }
-    /**
-     * returns in alleles[] the genotype specified in index in the sequence:
-     * 0/0, 0/1, 1/1, 0/2, 1/2, 2/2, 0/3...
-     * @param index in this sequence, starting in 0
-     * @param alleles returned genotype.
-     */
-    public static void getGenotype(int index, Integer alleles[]) {
-//        index++;
-//        double value = (-3 + Math.sqrt(1 + 8 * index)) / 2;    // slower than the iterating version, right?
-//        alleles[1] = new Double(Math.ceil(value)).intValue();
-//        alleles[0] = alleles[1] - ((alleles[1] + 1) * (alleles[1] +2) / 2 - index);
-        
-        int cursor = 0;
-        final int MAX_ALLOWED_ALLELES = 100;   // should we allow more than 100 alleles?
-        for (int i = 0; i < MAX_ALLOWED_ALLELES; i++) {
-            for (int j = 0; j <= i; j++) {
-                if (cursor == index) {
-                    alleles[0] = j;
-                    alleles[1] = i;
-                    return;
-                }
-                cursor++;
-            }
-        }
-    }
-
-    protected Genotype parseGenotype(String gt, Variant variant, int numAllele, String[] alternateAlleles) {
+    public static Genotype parseGenotype(String gt, Variant variant, int numAllele, String[] alternateAlleles) {
         Genotype g;
         Matcher m;
 
@@ -296,7 +183,7 @@ public class VariantAggregatedVcfFactory extends VariantVcfFactory {
             int val2 = mapToMultiallelicIndex(allele2, numAllele);
 
             return new Genotype(val1 + "/" + val2, variant.getReference(), variant.getAlternate());
-            
+
 //            if ((allele1 == 0 || allele1 == (numAllele + 1)) && (allele2 == 0 || allele2 == (numAllele + 1))) {
 //
 //                allele1 = allele1 > 1 ? 1 : allele1;
@@ -341,22 +228,5 @@ public class VariantAggregatedVcfFactory extends VariantVcfFactory {
         return null;
     }
 
-    protected void addGenotypeWithGTS(Variant variant, VariantSourceEntry sourceEntry, String[] splitsGTC, String[] alternateAlleles
-            , int numAllele, VariantStats cohortStats) {
-        if (sourceEntry.hasAttribute("GTS")) {
-            String splitsGTS[] = sourceEntry.getAttribute("GTS").split(",");
-            if (splitsGTC.length == splitsGTS.length) {
-                for (int i = 0; i < splitsGTC.length; i++) {
-                    String gt = splitsGTS[i];
-                    int gtCount = Integer.parseInt(splitsGTC[i]);
-                    
-                    Genotype g = parseGenotype(gt, variant, numAllele, alternateAlleles);
-                    if (g != null) {
-                        cohortStats.addGenotype(g, gtCount);
-                    }
-                }
-            }
-        }
-    }
 }
 
