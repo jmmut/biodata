@@ -9,6 +9,7 @@ import org.opencb.biodata.models.variant.VariantSource;
 import org.opencb.biodata.models.variant.stats.VariantSourceStats;
 import org.opencb.biodata.models.variant.stats.VariantAggregatedStats;
 import org.opencb.biodata.models.variant.stats.VariantStats;
+import org.opencb.biodata.tools.variant.stats.VariantStatsCalculator;
 import org.opencb.commons.run.Task;
 
 /**
@@ -46,13 +47,13 @@ public class VariantStatsTask extends Task<Variant> {
                         variantStats = new VariantStats(variant);
                         break;
                     case BASIC:
-                        variantStats = new VariantAggregatedStats(variant);
+//                        variantStats = new VariantAggregatedStats(variant);
                         break;
                     case EVS:
                         // TODO Should create an object!
                         break;
                 }
-                file.setStats(variantStats.calculate(file.getSamplesData(), file.getAttributes(), source.getPedigree()));
+                file.setStats(VariantStatsCalculator.calculate(variant, file.getSamplesData(), file.getAttributes(), source.getPedigree()));
             }
         }
         
